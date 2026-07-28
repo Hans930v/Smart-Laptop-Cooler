@@ -1,4 +1,4 @@
-# Smart Laptop Cooler (ThermalBridge)
+# Smart Laptop Cooler or SLC
 
 ⚠️ **Work in progress.** Core logic is implemented and being tested, but fan hardware has not yet been fully validated end-to-end. Not recommended for use yet — expect breaking changes.
 
