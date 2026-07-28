@@ -1,0 +1,10 @@
+bin/
+obj/
+*.user
+*.suo
+lastcomport.txt
+*.hex
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
