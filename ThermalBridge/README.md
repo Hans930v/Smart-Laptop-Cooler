@@ -1,6 +1,6 @@
 # ThermalBridge
 
-Windows companion app for the Smart Laptop Cooler. Reads live CPU/GPU temperature and power draw using [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor), and streams it to the [ESP32 firmware](../firmware) over Bluetooth SPP.
+Windows companion app for the Smart Laptop Cooler. Reads live CPU/GPU temperature and power draw using [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor), and streams it to the [ESP32 firmware](../Firmware) over Bluetooth SPP.
 
 ⚠️ **Work in progress.**
 
