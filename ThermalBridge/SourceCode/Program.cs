@@ -104,6 +104,7 @@ namespace ThermalBridge
     {
         const string EXPECTED_REPLY = "THERMALBRIDGE";
         const string CONFIG_PATH = "lastcomport.txt";
+        const float SENSOR_MISSING = -1f;
 
         // Opens a port, pings it, and if verified, KEEPS IT OPEN and returns it.
         // If verification fails, closes the port and returns null.
@@ -167,6 +168,18 @@ namespace ThermalBridge
             {
                 string[] ports = SerialPort.GetPortNames();
 
+                if (ports.Length == 0)
+                {
+                    Console.WriteLine("No COM ports detected. Bluetooth may be turned off.");
+                    Console.WriteLine("Please ensure:");
+                    Console.WriteLine("  1. Bluetooth is turned ON");
+                    Console.WriteLine("  2. Smart Laptop Cooler is powered on and paired to bluetooth");
+                    Console.WriteLine();
+                    Console.WriteLine("Press ENTER to restart the scan...");
+                    Console.ReadLine();
+                    continue;
+                }
+
                 Console.WriteLine($"Searching for Smart Laptop Cooler across {ports.Length} port(s)...");
 
                 foreach (string portName in ports)
@@ -229,8 +242,10 @@ namespace ThermalBridge
             if (anyMissing)
             {
                 Console.WriteLine("WARNING: One or more required sensors were not found.");
-                Console.WriteLine("Check the sensor dump above and adjust the name filters in ReadAll().\n");
-                Console.WriteLine("Press ENTER to continue anyway, or Ctrl+C to exit and fix the code.");
+                Console.WriteLine("The firmware now handles missing sensors gracefully (sent as -1),");
+                Console.WriteLine("so streaming will continue using whichever sensors ARE available.");
+                Console.WriteLine("Check the sensor dump above if you want to fix the name filters in ReadAll().\n");
+                Console.WriteLine("Press ENTER to continue, or Ctrl+C to exit and fix the code.");
                 Console.ReadLine();
             }
             else
@@ -238,12 +253,17 @@ namespace ThermalBridge
                 Console.WriteLine("All required sensors confirmed.\n");
             }
 
-            Console.WriteLine("Please ensure the Smart Laptop Cooler is powered on and paired via Bluetooth.\n");
+            Console.WriteLine("Please ensure:");
+            Console.WriteLine("  1. Bluetooth is turned ON");
+            Console.WriteLine("  2. Smart Laptop Cooler is powered on and paired to bluetooth");
+            Console.WriteLine();
+            Console.WriteLine("Press ENTER to start scanning...");
+            Console.ReadLine();
 
             int baudRate = 115200;
             SerialPort port = FindAndConnect(baudRate);
 
-            Console.WriteLine("Streaming sensor data. Press Ctrl+C to stop.\n");
+            Console.WriteLine("Streaming sensor data. Press Ctrl+C or close the window to stop.\n");
 
             try
             {
@@ -251,7 +271,12 @@ namespace ThermalBridge
                 {
                     var (t, p, g) = reader.ReadAll();
 
-                    string payload = string.Format("{0:F1},{1:F2},{2:F1}\n", t ?? 0, p ?? 0, g ?? 0);
+                    // Missing sensors are sent as -1 (SENSOR_MISSING) rather than 0,
+                    // so the ESP32 can tell "not found" apart from a real 0.0 reading.
+                    string payload = string.Format("{0:F1},{1:F2},{2:F1}\n",
+                        t.HasValue ? t.Value : SENSOR_MISSING,
+                        p.HasValue ? p.Value : SENSOR_MISSING,
+                        g.HasValue ? g.Value : SENSOR_MISSING);
 
                     try
                     {
