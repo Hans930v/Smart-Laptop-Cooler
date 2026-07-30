@@ -18,7 +18,7 @@ void updateLED(bool connected) {
   if (connected) {
     digitalWrite(LED_PIN, HIGH);
   } else {
-    if (millis() - lastBlinkTime > 500) {
+    if (millis() - lastBlinkTime > 1000) {
       lastBlinkTime = millis();
       ledState = !ledState;
       digitalWrite(LED_PIN, ledState ? HIGH : LOW);
@@ -72,7 +72,7 @@ void setup() {
   Serial.println("[INIT] LED: SLOW BLINK = waiting to pair | SOLID ON = connected");
   Serial.println("----------------------------------------");
 
-  drawStatus("Waiting for BT..");
+  // drawStatus("Waiting for BT..");
 
   lastRxTime = millis();
   prevSampleTime = millis();
