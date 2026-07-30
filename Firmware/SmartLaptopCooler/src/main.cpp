@@ -72,8 +72,6 @@ void setup() {
   Serial.println("[INIT] LED: SLOW BLINK = waiting to pair | SOLID ON = connected");
   Serial.println("----------------------------------------");
 
-  // drawStatus("Waiting for BT..");
-
   lastRxTime = millis();
   prevSampleTime = millis();
 }
