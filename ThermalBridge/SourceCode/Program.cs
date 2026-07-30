@@ -123,7 +123,7 @@ namespace ThermalBridge
         private static readonly string AppDataPath =
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ThermalBridge");
+                "Thermal Bridge");
 
         private static readonly string LogPath =
             Path.Combine(AppDataPath, "thermalbridge.log");
@@ -192,12 +192,12 @@ namespace ThermalBridge
             if (handle != IntPtr.Zero)
             {
                 ShowWindow(handle, SW_SHOW);
-                try { Console.Title = "ThermalBridge"; } catch { }
+                try { Console.Title = "Thermal Bridge"; } catch { }
                 return;
             }
 
             AllocConsole();
-            try { Console.Title = "ThermalBridge — Starting..."; } catch { }
+            try { Console.Title = "Thermal Bridge — Starting..."; } catch { }
         }
 
         public static void HideConsole()
@@ -214,10 +214,10 @@ namespace ThermalBridge
                 Thread dialogThread = new Thread(() =>
                 {
                     var result = MessageBox.Show(
-                        "Do you want to keep ThermalBridge running in the background?\n\n" +
+                        "Do you want to keep Thermal Bridge running in the background?\n\n" +
                         "Yes — hide console, continue running from tray\n" +
-                        "No — exit ThermalBridge completely",
-                        "ThermalBridge",
+                        "No — exit Thermal Bridge completely",
+                        "Thermal Bridge",
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Question);
 
@@ -258,7 +258,7 @@ namespace ThermalBridge
         static readonly string ConfigPath =
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ThermalBridge",
+                "Thermal Bridge",
                 "lastcomport.txt");
 
         internal static volatile bool _shuttingDown = false;
@@ -270,7 +270,7 @@ namespace ThermalBridge
         private static readonly string StartupShortcutPath =
     Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.Startup),
-        "ThermalBridge.lnk");
+        "Thermal Bridge.lnk");
 
         private static bool IsInStartup() => File.Exists(StartupShortcutPath);
 
@@ -430,7 +430,7 @@ namespace ThermalBridge
         static void PrintBanner()
         {
             Logger.Log("========================================================");
-            Logger.Log("                     ThermalBridge");
+            Logger.Log("                    Thermal Bridge");
             Logger.Log("        Windows Companion for Smart Laptop Cooler");
             Logger.Log("========================================================");
             Logger.Log("Developed by Hansoy");
@@ -441,7 +441,7 @@ namespace ThermalBridge
             Logger.Log("Licensed under the Mozilla Public License 2.0");
             Logger.Log("https://github.com/LibreHardwareMonitor/LibreHardwareMonitor");
             Logger.Log("");
-            Logger.Log("ThermalBridge Copyright (c) 2026 Hansoy");
+            Logger.Log("Thermal Bridge Copyright (c) 2026 Hansoy");
             Logger.Log("Released as part of the Smart Laptop Cooler project.");
             Logger.Log("========================================================");
         }
@@ -495,7 +495,7 @@ namespace ThermalBridge
 
             menu.Items.Add(new ToolStripSeparator());
 
-            var exitItem = new ToolStripMenuItem("Exit ThermalBridge");
+            var exitItem = new ToolStripMenuItem("Exit Thermal Bridge");
             exitItem.Click += (_, _) =>
             {
                 Logger.Log("[EXIT] Exit requested from tray menu.");
@@ -508,7 +508,7 @@ namespace ThermalBridge
             _trayIcon = new NotifyIcon
             {
                 Icon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!),
-                Text = "ThermalBridge — Initializing...",
+                Text = "Thermal Bridge — Initializing...",
                 Visible = true,
                 ContextMenuStrip = menu
             };
@@ -522,11 +522,11 @@ namespace ThermalBridge
 
             string text = _state switch
             {
-                ConnectionState.Initializing => "ThermalBridge — Initializing...",
-                ConnectionState.Scanning => "ThermalBridge — Searching for cooler...",
-                ConnectionState.Connected => "ThermalBridge — Connected",
-                ConnectionState.Reconnecting => "ThermalBridge — Reconnecting...",
-                _ => "ThermalBridge"
+                ConnectionState.Initializing => "Thermal Bridge — Initializing...",
+                ConnectionState.Scanning => "Thermal Bridge — Searching for cooler...",
+                ConnectionState.Connected => "Thermal Bridge — Connected",
+                ConnectionState.Reconnecting => "Thermal Bridge — Reconnecting...",
+                _ => "Thermal Bridge"
             };
 
             _trayIcon.Text = text;
@@ -534,7 +534,7 @@ namespace ThermalBridge
             if (_trayIcon.ContextMenuStrip?.Items.Count > 0 &&
                 _trayIcon.ContextMenuStrip.Items[0] is ToolStripMenuItem statusItem)
             {
-                statusItem.Text = $"Status: {text.Replace("ThermalBridge — ", "")}";
+                statusItem.Text = $"Status: {text.Replace("Thermal Bridge — ", "")}";
             }
         }
 
@@ -543,7 +543,7 @@ namespace ThermalBridge
             Directory.CreateDirectory(
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "ThermalBridge"));
+                    "Thermal Bridge"));
 
             PrintBanner();
             Logger.Log("[INIT] Initializing hardware monitoring...");
@@ -663,7 +663,7 @@ namespace ThermalBridge
             {
                 try { if (port != null && port.IsOpen) port.Close(); } catch { }
                 _reader?.Close();
-                Logger.Log("[EXIT] ThermalBridge stopped.");
+                Logger.Log("[EXIT] Thermal Bridge stopped.");
             }
         }
 
@@ -675,14 +675,14 @@ namespace ThermalBridge
             ConsoleManager.ShowStartupConsole();
             ConsoleManager.RegisterCloseHandler();
 
-            AppDomain.CurrentDomain.ProcessExit += (_, _) => Logger.Log("[EXIT] ThermalBridge process exiting.");
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => Logger.Log("[EXIT] Thermal Bridge process exiting.");
 
             InitTrayIcon();
 
             var workerThread = new Thread(RunStreamingWorker)
             {
                 IsBackground = true,
-                Name = "ThermalBridge-Streaming"
+                Name = "Thermal Bridge-Streaming"
             };
             workerThread.Start();
 
