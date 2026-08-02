@@ -9,6 +9,26 @@ uint8_t displayPWM = 76;
 bool    displayConnected = false;
 bool    displaySafeMode = false;
 
+// ===== Simple spinning fan-blade glyph, drawn procedurally (no bitmap needed) =====
+// Draws a 4-blade spinner centered at (cx, cy) with given radius, rotated by angle step.
+void drawFanSpinner(int cx, int cy, int radius, uint8_t step) {
+  // 8 rotation steps -> full spin cycle. Each step draws blades at a rotated offset.
+  float angle = (step % 8) * (PI / 4.0); // 45° per step
+
+  for (int i = 0; i < 4; i++) {
+    float a = angle + (i * PI / 2.0); // 4 blades, 90° apart
+    int   x1 = cx + (int)(cos(a) * 2);
+    int   y1 = cy + (int)(sin(a) * 2);
+    int   x2 = cx + (int)(cos(a) * radius);
+    int   y2 = cy + (int)(sin(a) * radius);
+    u8g2.drawLine(x1, y1, x2, y2);
+  }
+  u8g2.drawCircle(cx, cy, 2); // hub
+}
+
+// ===== drawBrand: logo wipes/fades in, spinner "powers up" beside it =====
+// Non-blocking: call repeatedly from setup() in a loop with millis() gating,
+// OR call once per frame if you're already looping in setup(). See usage note below.
 void drawBrand(void) {
   u8g2.setFontMode(1);
   u8g2.setBitmapMode(1);
@@ -18,22 +38,101 @@ void drawBrand(void) {
   int x = (128 - logoW) / 2;
   int y = (64 - logoH) / 2;
 
-  u8g2.clearBuffer();
-  u8g2.drawXBMP(x, y, logoW, logoH, image_HansoyLogo_bits);
-  u8g2.sendBuffer();
+  const unsigned long ANIM_DURATION_MS = 2000; // total wipe-in time
+  const unsigned long FRAME_MS = 40;           // ~25fps update rate
+  unsigned long       startTime = millis();
+  uint8_t             spinStep = 0;
+  unsigned long       lastSpin = 0;
+
+  while (millis() - startTime < ANIM_DURATION_MS) {
+    unsigned long elapsed = millis() - startTime;
+    int           revealHeight = map(elapsed, 0, ANIM_DURATION_MS, 0, logoH);
+    revealHeight = constrain(revealHeight, 0, logoH);
+
+    u8g2.clearBuffer();
+
+    // Wipe-in: only draw the top N rows of the logo, growing each frame.
+    // u8g2 doesn't crop XBMP natively, so we draw full then mask the unrevealed part.
+    u8g2.drawXBMP(x, y, logoW, logoH, image_HansoyLogo_bits);
+    if (revealHeight < logoH) {
+      u8g2.setDrawColor(0); // erase (background color) to mask the "not yet revealed" bottom
+      u8g2.drawBox(x, y + revealHeight, logoW, logoH - revealHeight);
+      u8g2.setDrawColor(1);
+    }
+
+    // Small spinner bottom-right, ticks independently of the wipe
+    if (millis() - lastSpin > 120) {
+      lastSpin = millis();
+      spinStep++;
+    }
+    drawFanSpinner(112, 54, 8, spinStep);
+
+    u8g2.sendBuffer();
+    delay(FRAME_MS); // boot sequence only — fine here since nothing else needs to run yet
+  }
+
+  // Final settled frame: full logo, spinner still gently turning for a moment
+  for (int i = 0; i < 6; i++) {
+    u8g2.clearBuffer();
+    u8g2.drawXBMP(x, y, logoW, logoH, image_HansoyLogo_bits);
+    drawFanSpinner(112, 54, 8, spinStep++);
+    u8g2.sendBuffer();
+    delay(120);
+  }
 }
 
+// ===== drawModel: logo slides in from the side, spinner settles beside it, "ready" pulse =====
 void drawModel(void) {
   u8g2.setFontMode(1);
   u8g2.setBitmapMode(1);
 
   int logoW = 121;
   int logoH = 51;
-  int x = (128 - logoW) / 2;
+  int finalX = (128 - logoW) / 2;
   int y = (64 - logoH) / 2;
 
+  const unsigned long SLIDE_DURATION_MS = 700;
+  const unsigned long FRAME_MS = 30;
+  unsigned long       startTime = millis();
+  uint8_t             spinStep = 0;
+  unsigned long       lastSpin = 0;
+
+  // Slide in from off-screen left
+  while (millis() - startTime < SLIDE_DURATION_MS) {
+    unsigned long elapsed = millis() - startTime;
+    int           currentX = map(elapsed, 0, SLIDE_DURATION_MS, -logoW, finalX);
+    currentX = constrain(currentX, -logoW, finalX);
+
+    u8g2.clearBuffer();
+    u8g2.drawXBMP(currentX, y, logoW, logoH, image_logo_bits);
+
+    if (millis() - lastSpin > 100) {
+      lastSpin = millis();
+      spinStep++;
+    }
+    drawFanSpinner(10, 8, 6, spinStep); // small spinner top-left, "already running" cue
+
+    u8g2.sendBuffer();
+    delay(FRAME_MS);
+  }
+
+  // Settled: logo in place, spinner continues a bit, then a soft "ready" blink of the whole frame
+  for (int i = 0; i < 5; i++) {
+    u8g2.clearBuffer();
+    u8g2.drawXBMP(finalX, y, logoW, logoH, image_logo_bits);
+    drawFanSpinner(10, 8, 6, spinStep++);
+    u8g2.sendBuffer();
+    delay(100);
+  }
+
+  // Quick invert-flash to signal "ready" (bridges into dashboard/status screens next)
+  u8g2.setDrawColor(2); // XOR mode - inverts what's there
+  u8g2.drawBox(0, 0, 128, 64);
+  u8g2.sendBuffer();
+  delay(80);
+  u8g2.setDrawColor(1);
   u8g2.clearBuffer();
-  u8g2.drawXBMP(x, y, logoW, logoH, image_logo_bits);
+  u8g2.drawXBMP(finalX, y, logoW, logoH, image_logo_bits);
   u8g2.sendBuffer();
 }
 
@@ -45,6 +144,7 @@ void drawStatus(const char *msg) {
 }
 
 void drawDashboard() {
+  // unchanged from your version
   char line[24];
   u8g2.clearBuffer();
 
@@ -87,7 +187,7 @@ void drawDashboard() {
   }
   u8g2.drawStr(67, 31, line);
 
-  extern float smoothedPower; // defined in fan_control.cpp
+  extern float smoothedPower;
 
   if (displaySafeMode) {
     u8g2.drawStr(0, 56, "SAFE MODE");

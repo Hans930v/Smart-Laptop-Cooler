@@ -53,13 +53,13 @@ void applySafeMode() {
 }
 
 int tempToPWM(float t) {
-  if (t < 50)
-    return 76;
-  if (t < 70)
-    return map(t, 50, 70, 76, 178);
-  if (t < 85)
-    return map(t, 70, 85, 178, 255);
-  return 255;
+  if (t < TEMP_RAMP_START)
+    return IDLE_PWM;
+  if (t < TEMP_RAMP_MID)
+    return map(t, TEMP_RAMP_START, TEMP_RAMP_MID, RAMP_START_PWM, RAMP_MID_PWM);
+  if (t < TEMP_RAMP_FULL)
+    return map(t, TEMP_RAMP_MID, TEMP_RAMP_FULL, RAMP_MID_PWM, RAMP_FULL_PWM);
+  return RAMP_FULL_PWM;
 }
 
 float smoothValue(float newVal, float prevSmoothed, float alpha, bool isFirst) {

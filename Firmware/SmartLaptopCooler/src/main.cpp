@@ -183,7 +183,8 @@ void loop() {
       }
 
       if (maxTempRate > RISE_RATE_THRESHOLD) {
-        int rateBoost = constrain((int)((maxTempRate - RISE_RATE_THRESHOLD) * 40), 0, 60);
+        int rateBoost = constrain((int)((maxTempRate - RISE_RATE_THRESHOLD) * TEMP_RATE_BOOST_GAIN),
+                                  0, TEMP_RATE_BOOST_CAP);
         boost += rateBoost;
         boostReason += "T";
       }
@@ -198,38 +199,22 @@ void loop() {
         boostReason += "L";
       }
 
-      int targetPWM = constrain(basePWM + boost, 76, 255);
+      int targetPWM = constrain(basePWM + boost, MIN_TARGET_PWM, 255);
 
-      if (v.cpuTempValid) {
-        if (smoothedCpuTemp >= 90)
-          targetPWM = 255;
-        else if (smoothedCpuTemp >= 88)
-          targetPWM = max(targetPWM, 245);
-        else if (smoothedCpuTemp >= 85)
-          targetPWM = max(targetPWM, 230);
-        else if (smoothedCpuTemp >= 82)
-          targetPWM = max(targetPWM, 210);
-      }
-
-      if (v.gpuTempValid) {
-        if (smoothedGpuTemp >= 90)
-          targetPWM = 255;
-        else if (smoothedGpuTemp >= 88)
-          targetPWM = max(targetPWM, 245);
-        else if (smoothedGpuTemp >= 85)
-          targetPWM = max(targetPWM, 230);
-        else if (smoothedGpuTemp >= 82)
-          targetPWM = max(targetPWM, 210);
-      }
+      // High-temp per-sensor floor clamps removed — the new aggressive base
+      // curve (ramps to FULL_PWM at TEMP_RAMP_FULL=58C) already saturates well
+      // before the old 82/85/88/90 thresholds. Emergency logic below catches
+      // any runaway the curve can't keep up with.
 
       bool emergency =
-          (v.cpuTempValid && smoothedCpuTemp >= 90) || (v.gpuTempValid && smoothedGpuTemp >= 90);
+          (v.cpuTempValid && smoothedCpuTemp >= EMERGENCY_TEMP) ||
+          (v.gpuTempValid && smoothedGpuTemp >= EMERGENCY_TEMP);
 
       int appliedPWM;
       if (emergency) {
         currentPWM = 255;
         appliedPWM = 255;
-        Serial.println("[EMERGENCY] Temp >= 90C, forcing full fan!");
+        Serial.println("[EMERGENCY] Thermal runaway, forcing full fan!");
       } else {
         appliedPWM = rampPWM(targetPWM);
       }
