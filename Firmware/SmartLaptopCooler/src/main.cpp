@@ -1,3 +1,12 @@
+/*
+ * main.cpp - Firmware entry point and main control loop.
+ *
+ * Receives "cpuTemp,cpuPower,gpuTemp" telemetry packets from the ThermalBridge
+ * PC app over Classic Bluetooth SPP, runs them through smoothing + a piecewise
+ * fan curve + three additive predictive boosts (rate-of-rise, power-spike,
+ * power-level), an emergency thermal clamp, and adaptive ramping, then drives
+ * a fan via PWM. Updates the OLED dashboard and pushes status overlay state.
+ */
 #include <Arduino.h>
 #include "BluetoothSerial.h"
 #include "esp_bt.h"
@@ -13,6 +22,8 @@ bool          wasConnected = false;
 bool          ledState = false;
 unsigned long lastBlinkTime = 0;
 unsigned long lastRxTime = 0;
+unsigned long emergencyBannerUntil = 0;
+bool          lastEmergencyState = false;
 
 void updateLED(bool connected) {
   if (connected) {
@@ -84,10 +95,16 @@ void loop() {
     lastRxTime = millis();
     displayConnected = true;
     displaySafeMode = false;
+    displayStatus = DashStatus::NORMAL;
+    displayBoostTag[0] = '\0';
+    resetMaxTrackers();
+    emergencyBannerUntil = 0;
+    lastEmergencyState = false;
   }
   if (!isConnected && wasConnected) {
     Serial.println("[BT] Client disconnected. Waiting for reconnection...");
     displayConnected = false;
+    displayStatus = DashStatus::RECONNECTING;
   }
   wasConnected = isConnected;
 
@@ -184,7 +201,8 @@ void loop() {
 
       if (maxTempRate > RISE_RATE_THRESHOLD) {
         int rateBoost = constrain((int)((maxTempRate - RISE_RATE_THRESHOLD) * TEMP_RATE_BOOST_GAIN),
-                                  0, TEMP_RATE_BOOST_CAP);
+                                  0,
+                                  TEMP_RATE_BOOST_CAP);
         boost += rateBoost;
         boostReason += "T";
       }
@@ -201,14 +219,8 @@ void loop() {
 
       int targetPWM = constrain(basePWM + boost, MIN_TARGET_PWM, 255);
 
-      // High-temp per-sensor floor clamps removed — the new aggressive base
-      // curve (ramps to FULL_PWM at TEMP_RAMP_FULL=58C) already saturates well
-      // before the old 82/85/88/90 thresholds. Emergency logic below catches
-      // any runaway the curve can't keep up with.
-
-      bool emergency =
-          (v.cpuTempValid && smoothedCpuTemp >= EMERGENCY_TEMP) ||
-          (v.gpuTempValid && smoothedGpuTemp >= EMERGENCY_TEMP);
+      bool emergency = (v.cpuTempValid && smoothedCpuTemp >= EMERGENCY_TEMP) ||
+                       (v.gpuTempValid && smoothedGpuTemp >= EMERGENCY_TEMP);
 
       int appliedPWM;
       if (emergency) {
@@ -217,6 +229,29 @@ void loop() {
         Serial.println("[EMERGENCY] Thermal runaway, forcing full fan!");
       } else {
         appliedPWM = rampPWM(targetPWM);
+      }
+
+      if (emergency) {
+        if (!lastEmergencyState) {
+          emergencyBannerUntil = millis() + 1000;
+          Serial.println("[EMERGENCY] Banner flash 1s.");
+        }
+        lastEmergencyState = true;
+      } else {
+        lastEmergencyState = false;
+        emergencyBannerUntil = 0;
+      }
+
+      if (millis() < emergencyBannerUntil) {
+        displayStatus = DashStatus::EMERGENCY;
+        displayBoostTag[0] = '\0';
+      } else if (boost > 0) {
+        displayStatus = DashStatus::BOOST;
+        strncpy(displayBoostTag, boostReason.c_str(), sizeof(displayBoostTag) - 1);
+        displayBoostTag[sizeof(displayBoostTag) - 1] = '\0';
+      } else {
+        displayStatus = DashStatus::NORMAL;
+        displayBoostTag[0] = '\0';
       }
 
       analogWrite(FAN_PWM_PIN, appliedPWM);
@@ -228,7 +263,7 @@ void loop() {
       Serial.println("------------");
       Serial.printf("CPU: %s | GPU: %s | Power: %s -> Drive: %.1fC | PWM: %d\n",
                     v.cpuTempValid ? String(cpuTemp, 1).c_str() : "N/A",
-                    v.gpuTempValid ? String(gpuTemp, 1).c_str() : "N/A",
+                    v.gpuTempValid ? String(cpuTemp, 1).c_str() : "N/A",
                     v.cpuPowerValid ? String(cpuPower, 2).c_str() : "N/A",
                     driveTemp,
                     appliedPWM);

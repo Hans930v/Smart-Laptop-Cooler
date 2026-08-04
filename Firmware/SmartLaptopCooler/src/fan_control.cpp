@@ -1,6 +1,15 @@
+/*
+ * fan_control.cpp - Smoothing, fan-curve mapping, and ramping logic.
+ *
+ * Holds the EMA smoothing helpers, the piecewise temperature -> PWM base curve
+ * (idle -> ramp-start -> mid -> full), adaptive PWM ramping toward a target,
+ * and the safe-mode fallback applied when Bluetooth data is lost (ramps the fan
+ * toward SAFE_MODE_PWM and marks the dashboard status). All smoothed state
+ * shared with main loop lives here as globals visible via fan_control.h.
+ */
 #include "fan_control.h"
 #include "config.h"
-#include "display.h" // for displaySafeMode, displayPWM
+#include "display.h"
 
 float smoothedCpuTemp = 0;
 float smoothedGpuTemp = 0;
@@ -42,23 +51,28 @@ int rampPWM(int target) {
 }
 
 void applySafeMode() {
-  int rampedSafe = rampPWM(SAFE_MODE_PWM);
-  analogWrite(FAN_PWM_PIN, rampedSafe);
+  currentPWM = rampPWM(SAFE_MODE_PWM);
+  analogWrite(FAN_PWM_PIN, currentPWM);
   Serial.print("[SAFE MODE] No data received in >");
   Serial.print((unsigned long)TIMEOUT_MS);
   Serial.print("ms. Fan ramping to safe PWM: ");
-  Serial.println(rampedSafe);
+  Serial.println(currentPWM);
   displaySafeMode = true;
-  displayPWM = rampedSafe;
+  displayStatus = DashStatus::SAFE_MODE;
+  displayPWM = currentPWM;
 }
 
 int tempToPWM(float t) {
   if (t < TEMP_RAMP_START)
     return IDLE_PWM;
-  if (t < TEMP_RAMP_MID)
-    return map(t, TEMP_RAMP_START, TEMP_RAMP_MID, RAMP_START_PWM, RAMP_MID_PWM);
-  if (t < TEMP_RAMP_FULL)
-    return map(t, TEMP_RAMP_MID, TEMP_RAMP_FULL, RAMP_MID_PWM, RAMP_FULL_PWM);
+  if (t < TEMP_RAMP_MID) {
+    float frac = (t - TEMP_RAMP_START) / (TEMP_RAMP_MID - TEMP_RAMP_START);
+    return (int)(RAMP_START_PWM + frac * (RAMP_MID_PWM - RAMP_START_PWM));
+  }
+  if (t < TEMP_RAMP_FULL) {
+    float frac = (t - TEMP_RAMP_MID) / (TEMP_RAMP_FULL - TEMP_RAMP_MID);
+    return (int)(RAMP_MID_PWM + frac * (RAMP_FULL_PWM - RAMP_MID_PWM));
+  }
   return RAMP_FULL_PWM;
 }
 

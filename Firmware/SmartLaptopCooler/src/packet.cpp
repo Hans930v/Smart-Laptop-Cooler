@@ -1,3 +1,12 @@
+/*
+ * packet.cpp - Bluetooth packet parsing and validation.
+ *
+ * Parses incoming "cpuTemp,cpuPower,gpuTemp" text lines into three floats via
+ * a hand-rolled lexer (avoids pulling the float-sscanf formatter into flash),
+ * and validates each field against the bounds defined in config.h. The
+ * SENSOR_MISSING sentinel (-1.0) is treated as "sensor not present" rather
+ * than invalid-by-range, so the rest of the firmware can distinguish.
+ */
 #include "packet.h"
 #include "config.h"
 
@@ -29,8 +38,6 @@ PacketValidity validatePacket(float cpuTemp, float cpuPower, float gpuTemp) {
   return v;
 }
 
-// Hand-rolled parser: "cpuTemp,cpuPower,gpuTemp" into floats.
-// Avoids sscanf("%f") which pulls the float-scanf formatter into flash.
 int parsePacket(const char *line, float &cpuTemp, float &cpuPower, float &gpuTemp) {
   int         parsed = 0;
   float      *out[3] = {&cpuTemp, &cpuPower, &gpuTemp};
