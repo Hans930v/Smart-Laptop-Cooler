@@ -61,6 +61,31 @@ namespace ThermalBridge
                 Logger.Log("[INIT] All required sensors confirmed.");
             }
 
+            // CPU Package temp + power specifically require the PawnIO kernel-mode
+            // driver. If those are missing on first read, pop a friendly diagnostic
+            // dialog offering a button to open the PawnIO download page. GPU Core
+            // temp uses the NVIDIA API and works without PawnIO, so missing GPU
+            // alone doesn't trigger this prompt.
+            bool cpuSensorsMissing = !cpuTemp.HasValue || !cpuPower.HasValue;
+            if (cpuSensorsMissing)
+            {
+                Logger.Log("[DIAG] CPU Package sensors missing — prompting user about PawnIO.");
+
+                string summary =
+                    $"CPU Package Temp:  {(cpuTemp.HasValue ? cpuTemp.Value.ToString("F1") + " C" : "NOT FOUND")}\r\n" +
+                    $"CPU Package Power: {(cpuPower.HasValue ? cpuPower.Value.ToString("F2") + " W" : "NOT FOUND")}\r\n" +
+                    $"GPU Core Temp:     {(gpuTemp.HasValue ? gpuTemp.Value.ToString("F1") + " C" : "NOT FOUND")}";
+
+                try
+                {
+                    ShowDiagnosticOnUi(summary);
+                }
+                catch (System.Exception ex)
+                {
+                    Logger.Log($"[DIAG] Could not show diagnostic dialog: {ex.Message}");
+                }
+            }
+
             Logger.Log("Please ensure:");
             Logger.Log("  1. Bluetooth is turned ON");
             Logger.Log("  2. Smart Laptop Cooler is powered on and paired to bluetooth");
@@ -137,6 +162,44 @@ namespace ThermalBridge
                 reader.Close();
                 Logger.Log("[EXIT] Thermal Bridge stopped.");
             }
+        }
+
+        /// <summary>
+        /// Shows the PawnIO diagnostic dialog modally on the UI thread, blocking
+        /// the streaming worker until the user dismisses it. Honors shutdown:
+        /// if shutdown is requested while the dialog is up, we skip showing it.
+        /// </summary>
+        private static void ShowDiagnosticOnUi(string summary)
+        {
+            if (AppShutdown.IsRequested) return;
+            if (Application.OpenForms.Count == 0)
+            {
+                // No UI form is open yet (e.g. user already hid the viewer).
+                // Create a tiny invisible owner so ShowDialog has a parent.
+                using var invisibleOwner = new Form
+                {
+                    ShowInTaskbar = false,
+                    FormBorderStyle = FormBorderStyle.None,
+                    Size = new System.Drawing.Size(0, 0),
+                    Opacity = 0
+                };
+                invisibleOwner.Show();
+                RunDialog(invisibleOwner, summary);
+                return;
+            }
+
+            var owner = Application.OpenForms[0];
+            if (owner == null) return;
+            if (owner.InvokeRequired)
+                owner.Invoke(new Action(() => RunDialog(owner, summary)));
+            else
+                RunDialog(owner, summary);
+        }
+
+        private static void RunDialog(IWin32Window owner, string summary)
+        {
+            using var dlg = new SensorDiagnosticForm(summary);
+            dlg.ShowDialog(owner);
         }
     }
 }

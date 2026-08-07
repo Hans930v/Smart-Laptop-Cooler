@@ -44,6 +44,18 @@ namespace ThermalBridge
 
         public const int PostConnectCountdownSec = 10;
 
+        // ===== External dependencies =====
+        //
+        // PawnIO is the kernel-mode driver LibreHardwareMonitor uses to read
+        // "deep" CPU sensors (CPU Package temp/power, per-core temps, etc.).
+        // Without it, those sensors return null. Users are redirected here
+        // when the first read fails; the app NEVER auto-installs the driver
+        // (silently installing a signed kernel driver at runtime is exactly
+        // the kind of behavior AVs love to flag).
+
+        public const string PawnIOPage = "https://pawnio.eu/";
+        public const string PawnIODownload = "https://github.com/namazso/PawnIO.Setup/releases/latest/download/PawnIO_setup.exe";
+
         // ===== FileSystem paths =====
         public static readonly string AppDataDir =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

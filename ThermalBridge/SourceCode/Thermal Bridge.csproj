@@ -19,6 +19,28 @@
     <Version>1.1.0</Version>
     <FileVersion>1.1.0.0</FileVersion>
     <AssemblyVersion>1.1.0.0</AssemblyVersion>
+
+    <!-- ===== Publish profile (single-file, self-contained, AV-friendly) =====
+         Open-source consumers can run `dotnet publish -c Release` with no extra
+         flags and get the right output at:
+           bin\Release\net10.0-windows\win-x64\publish\Thermal Bridge.exe
+
+         Notes:
+         - PublishSingleFile=true     bundles the .NET runtime + app into ONE .exe
+         - SelfContained=true         users do NOT need .NET 10 installed
+         - IncludeNativeLibrariesForSelfExtract=true
+                                      native libs (LibreHardwareMonitor's components)
+                                      extract to a temp dir at startup instead of
+                                      on-demand — faster startup + lower AV false
+                                      positive rate than on-demand extraction.
+         - Trimming is INTENTIONALLY off: full trim can break reflection-heavy
+           libraries (LibreHardwareMonitor at risk). Accept the ~150 MB exe size
+           in exchange for runtime safety + lowest AV false-positive risk.
+    -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>

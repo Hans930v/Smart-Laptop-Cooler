@@ -37,6 +37,7 @@ namespace ThermalBridge
         private readonly RichTextBox _textBox;
         private readonly ToolStripStatusLabel _statusLabel;
         private readonly ToolStripButton _cancelCountdownBtn;
+        private readonly ToolStripButton _copyAllBtn;
         private System.Windows.Forms.Timer? _countdownTimer;
         private int _secondsLeft;
         private bool _countdownAlreadyShown;   // suppress countdown on reconnects (per session)
@@ -54,11 +55,23 @@ namespace ThermalBridge
             _textBox = BuildTextBox();
             _statusLabel = new ToolStripStatusLabel { Text = StatusPrefix + "Initializing" };
             _cancelCountdownBtn = BuildCancelButton();
+            _copyAllBtn = BuildCopyAllButton();
 
             Controls.Add(_textBox);
-            Controls.Add(BuildStatusStrip(_statusLabel, _cancelCountdownBtn));
+            Controls.Add(BuildStatusStrip(_statusLabel, _cancelCountdownBtn, _copyAllBtn));
 
             WireEvents();
+            WindowSettings.ApplyTo(this);
+        }
+
+        private static ToolStripButton BuildCopyAllButton()
+        {
+            var btn = new ToolStripButton("Copy all")
+            {
+                ForeColor = StatusAccent,
+                Padding = new Padding(8, 0, 8, 0)
+            };
+            return btn;
         }
 
         private static ToolStripButton BuildCancelButton()
@@ -86,14 +99,20 @@ namespace ThermalBridge
             return tb;
         }
 
-        private static StatusStrip BuildStatusStrip(ToolStripStatusLabel label, ToolStripButton cancelBtn)
+        private static StatusStrip BuildStatusStrip(ToolStripStatusLabel label, ToolStripButton cancelBtn, ToolStripButton copyAllBtn)
         {
             // Soft mint-green accent — visible on the dark (30,30,30) strip, distinct
             // from the LightGray log text so the eye separates "status" from "log".
-            label.ForeColor = cancelBtn.ForeColor = StatusAccent;
+            label.ForeColor = cancelBtn.ForeColor = copyAllBtn.ForeColor = StatusAccent;
 
             var strip = new StatusStrip { BackColor = BackgroundColor };
             strip.Items.Add(label);
+            // "Copy all" lives on the left next to the status text so it's
+            // visually near the "logs" the user is looking at; Cancel lives on
+            // the right because it's a dismissive action.
+            strip.Items.Add(new ToolStripSeparator());
+            strip.Items.Add(copyAllBtn);
+            strip.Items.Add(new ToolStripLabel("    ") { Enabled = false });
             strip.Items.Add(new ToolStripSeparator());
             strip.Items.Add(cancelBtn);
             return strip;
@@ -104,6 +123,25 @@ namespace ThermalBridge
             Logger.OnLog += Logger_OnLog;
             StatusService.StatusChanged += OnStatusChanged;
             _cancelCountdownBtn.Click += CancelCountdown_Click;
+            _copyAllBtn.Click += CopyAll_Click;
+        }
+
+        private void CopyAll_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                // Use the Logger's bounded ring buffer (2000 lines) rather than
+                // the TextBox contents — works even when the form was hidden
+                // and the user is re-opening it to grab a copy.
+                var lines = Logger.GetBufferedLines();
+                if (lines.Length == 0) return;
+                Clipboard.SetText(string.Join(Environment.NewLine, lines));
+                _statusLabel.Text = StatusPrefix + "Connected — copied " + lines.Length + " lines to clipboard";
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[VIEWER] Copy all failed: {ex.Message}");
+            }
         }
 
         private void OnStatusChanged(ConnectionState state)
@@ -234,23 +272,86 @@ namespace ThermalBridge
 
         private void AppendLine(string line)
         {
-            _textBox.AppendText(line + Environment.NewLine);
-            _textBox.SelectionStart = _textBox.TextLength;
+            // Color the line based on its [LEVEL] prefix. The timestamp [yyyy-..]
+            // is NOT one of our prefixes, so plain lines (no bracketed tag) keep
+            // the default ForegroundColor via the RichTextBox's own BackColor/
+            // ForeColor properties set in BuildTextBox().
+            Color color = ColorForLine(line);
+            string text = line + Environment.NewLine;
+
+            int start = _textBox.TextLength;
+            _textBox.AppendText(text);
+
+            // Color the just-appended range via the SelectionColor API — RichTextBox
+            // doesn't accept a color argument to AppendText directly.
+            _textBox.SelectionStart  = start;
+            _textBox.SelectionLength = text.Length;
+            _textBox.SelectionColor  = color;
+
+            // Reset selection to end + scroll so the next append + the view stay clean.
+            _textBox.SelectionLength = 0;
+            _textBox.SelectionStart  = _textBox.TextLength;
             _textBox.ScrollToCaret();
         }
+
+        /// <summary>
+        /// Maps a log line's [LEVEL] prefix to a display color. Lines without a
+        /// recognized level prefix use the default ForegroundColor (LightGray).
+        /// </summary>
+        private static Color ColorForLine(string line)
+        {
+            // Look for "[LEVEL]" anywhere in the line (it always follows the
+            // timestamp, e.g. "[2026-08-05 19:32:09] [DETECT] Checking COM6...").
+            foreach (var (tag, color) in LevelColors)
+            {
+                if (line.Contains(tag, StringComparison.Ordinal))
+                    return color;
+            }
+            return ForegroundColor;
+        }
+
+        // Co-located color map for log levels. Standard severity palette —
+        // distinct hues, all readable on the dark (30,30,30) background.
+        private static readonly (string Tag, Color Color)[] LevelColors =
+        {
+            ("[FATAL]",  Color.FromArgb(255,  90,  90)),   // red   — fatal errors
+            ("[EXIT]",   Color.FromArgb(255, 120, 120)),   // pink  — exit-related
+            ("[WARN]",   Color.FromArgb(240, 200,  80)),   // yellow — warnings
+            ("[DETECT]", Color.FromArgb( 90, 210, 220)),   // cyan  — port discovery
+            ("[DIAG]",   Color.FromArgb(220, 140, 230)),   // magenta — diagnostics
+            ("[STREAM]", Color.FromArgb(180, 180, 180)),   // neutral gray — high-volume stream
+            ("[TRAY]",   Color.FromArgb(170, 200, 255)),   // soft blue — UI actions
+            ("[VIEWER]", Color.FromArgb(170, 200, 255)),   // soft blue — UI actions
+            ("[INIT]",   Color.FromArgb(170, 220, 170)),   // pale green — initialization
+            ("[SCAN]",   Color.FromArgb(170, 220, 170)),   // pale green — scan start
+        };
 
         /// <summary>Rehydrate from Logger's ring buffer (e.g. on second open).</summary>
         public void Rehydrate()
         {
             _textBox.Clear();
+            // Color each line by its level prefix, same as live AppendLine, so
+            // visual hierarchy is preserved on re-open.
             foreach (var line in Logger.GetBufferedLines())
-                _textBox.AppendText(line + Environment.NewLine);
-            _textBox.SelectionStart = _textBox.TextLength;
+            {
+                Color color = ColorForLine(line);
+                string text = line + Environment.NewLine;
+                int start = _textBox.TextLength;
+                _textBox.AppendText(text);
+                _textBox.SelectionStart  = start;
+                _textBox.SelectionLength = text.Length;
+                _textBox.SelectionColor  = color;
+            }
+            _textBox.SelectionLength = 0;
+            _textBox.SelectionStart  = _textBox.TextLength;
             _textBox.ScrollToCaret();
         }
 
         private void LogViewerForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            // Persist window geometry for next launch, regardless of close reason.
+            WindowSettings.SaveFrom(this);
+
             if (AppShutdown.IsRequested) return;
 
             if (e.CloseReason == CloseReason.UserClosing || e.CloseReason == CloseReason.TaskManagerClosing)

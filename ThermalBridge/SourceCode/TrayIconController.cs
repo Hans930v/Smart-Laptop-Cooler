@@ -32,6 +32,11 @@ namespace ThermalBridge
         // without rewriting both from scratch every time.
         private ConnectionState _lastState = ConnectionState.Initializing;
 
+        // Track which balloons we've already shown this session — most balloons
+        // (Connected/Reconnecting) should fire on every transition, but the
+        // "Connected for the first time" celebration shouldn't repeat.
+        private bool _firstConnectBalloonShown;
+
         public void Initialize()
         {
             var menu = new ContextMenuStrip();
@@ -40,7 +45,10 @@ namespace ThermalBridge
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(BuildOpenLogFileItem());
             menu.Items.Add(BuildShowLogViewerItem());
+            menu.Items.Add(BuildCopyLogItem());
             menu.Items.Add(BuildResetPreferencesItem());
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(BuildAboutItem());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(BuildExitItem(this));
 
@@ -63,6 +71,63 @@ namespace ThermalBridge
                 _trayIcon.ContextMenuStrip.BeginInvoke(new Action<ConnectionState>(ApplyStatus), state);
             else
                 ApplyStatus(state);
+
+            ShowBalloonFor(state);
+        }
+
+        /// <summary>
+        /// Shows a tray balloon on meaningful state transitions. Not every
+        /// transition deserves a balloon — only ones the user actively cares
+        /// about: first connect, reconnect, and connection loss.
+        /// </summary>
+        private void ShowBalloonFor(ConnectionState state)
+        {
+            if (_disposed || _trayIcon == null) return;
+            if (_trayIcon.ContextMenuStrip?.InvokeRequired ?? false)
+            {
+                _trayIcon.ContextMenuStrip.BeginInvoke(new Action<ConnectionState>(ShowBalloonFor), state);
+                return;
+            }
+
+            switch (state)
+            {
+                case ConnectionState.Connected:
+                    // Show the "Connected" balloon only on the FIRST connect of
+                    // this session — reconnects also fire Connected status, but
+                    // spamming balloons on every reconnect dropout gets noisy.
+                    if (!_firstConnectBalloonShown)
+                    {
+                        _firstConnectBalloonShown = true;
+                        ShowBalloon("Connected to Smart Laptop Cooler",
+                                    "Streaming telemetry. Right-click the tray icon for options.",
+                                    ToolTipIcon.Info);
+                    }
+                    break;
+
+                case ConnectionState.Reconnecting:
+                    ShowBalloon("Connection lost",
+                                "Searching for the Smart Laptop Cooler...",
+                                ToolTipIcon.Warning);
+                    break;
+
+                // Initializing and Scanning never balloon — they're noisy and
+                // happen at startup when the user might be doing other things.
+            }
+        }
+
+        private void ShowBalloon(string title, string text, ToolTipIcon icon, int timeoutMs = 3000)
+        {
+            try
+            {
+                // NotifyIcon.ShowBalloonTip is a no-op if Visible is false; we
+                // already set Visible=true in Initialize(). Timeout on modern
+                // Windows is system-minimum (often ~5s) regardless of our value.
+                _trayIcon!.ShowBalloonTip(timeoutMs, title, text, icon);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[TRAY] Balloon tip failed: {ex.Message}");
+            }
         }
 
         private static ToolStripMenuItem BuildStatusItem()
@@ -93,6 +158,26 @@ namespace ThermalBridge
         {
             var item = new ToolStripMenuItem("Show Log Viewer");
             item.Click += (_, _) => LogViewerFormService.Show();
+            return item;
+        }
+
+        private static ToolStripMenuItem BuildCopyLogItem()
+        {
+            var item = new ToolStripMenuItem("Copy Log to Clipboard");
+            item.Click += (_, _) =>
+            {
+                try
+                {
+                    var lines = Logger.GetBufferedLines();
+                    if (lines.Length == 0) return;
+                    Clipboard.SetText(string.Join(Environment.NewLine, lines));
+                    Logger.Log($"[TRAY] Copied {lines.Length} log lines to clipboard.");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"[TRAY] Copy log failed: {ex.Message}");
+                }
+            };
             return item;
         }
 
