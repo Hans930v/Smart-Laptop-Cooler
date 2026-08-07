@@ -9,8 +9,11 @@
 #pragma once
 #include <Arduino.h>
 
-#define LED_PIN     2
-#define FAN_PWM_PIN 4
+#define LED_PIN            2
+#define FAN_PWM_PIN        18
+#define FAN_PWM_CHANNEL    0
+#define FAN_PWM_FREQ       25  // Hz
+#define FAN_PWM_RESOLUTION 8   // bit resolution
 
 extern const unsigned long TIMEOUT_MS;
 

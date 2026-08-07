@@ -13,12 +13,9 @@
 PacketValidity validatePacket(float cpuTemp, float cpuPower, float gpuTemp) {
   PacketValidity v;
 
-  v.cpuTempValid =
-      (cpuTemp != SENSOR_MISSING) && (cpuTemp >= TEMP_MIN_VALID && cpuTemp <= TEMP_MAX_VALID);
-  v.gpuTempValid =
-      (gpuTemp != SENSOR_MISSING) && (gpuTemp >= TEMP_MIN_VALID && gpuTemp <= TEMP_MAX_VALID);
-  v.cpuPowerValid =
-      (cpuPower != SENSOR_MISSING) && (cpuPower >= POWER_MIN_VALID && cpuPower <= POWER_MAX_VALID);
+  v.cpuTempValid  = (cpuTemp != SENSOR_MISSING) && (cpuTemp >= TEMP_MIN_VALID && cpuTemp <= TEMP_MAX_VALID);
+  v.gpuTempValid  = (gpuTemp != SENSOR_MISSING) && (gpuTemp >= TEMP_MIN_VALID && gpuTemp <= TEMP_MAX_VALID);
+  v.cpuPowerValid = (cpuPower != SENSOR_MISSING) && (cpuPower >= POWER_MIN_VALID && cpuPower <= POWER_MAX_VALID);
 
   v.anyValid = v.cpuTempValid || v.gpuTempValid;
 
@@ -41,7 +38,7 @@ PacketValidity validatePacket(float cpuTemp, float cpuPower, float gpuTemp) {
 int parsePacket(const char *line, float &cpuTemp, float &cpuPower, float &gpuTemp) {
   int         parsed = 0;
   float      *out[3] = {&cpuTemp, &cpuPower, &gpuTemp};
-  const char *p = line;
+  const char *p      = line;
 
   for (int i = 0; i < 3; i++) {
     while (*p == ' ' || *p == ',')
@@ -62,7 +59,7 @@ int parsePacket(const char *line, float &cpuTemp, float &cpuPower, float &gpuTem
       intPart = intPart * 10 + (*p - '0');
       p++;
     }
-    long frac = 0;
+    long frac    = 0;
     long fracDiv = 1;
     if (*p == '.') {
       p++;

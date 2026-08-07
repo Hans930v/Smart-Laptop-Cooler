@@ -17,4 +17,4 @@ struct PacketValidity {
 };
 
 PacketValidity validatePacket(float cpuTemp, float cpuPower, float gpuTemp);
-int parsePacket(const char *line, float &cpuTemp, float &cpuPower, float &gpuTemp);
+int            parsePacket(const char *line, float &cpuTemp, float &cpuPower, float &gpuTemp);

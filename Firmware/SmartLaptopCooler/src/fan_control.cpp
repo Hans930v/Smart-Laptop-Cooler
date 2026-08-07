@@ -11,23 +11,23 @@
 #include "config.h"
 #include "display.h"
 
-float smoothedCpuTemp = 0;
-float smoothedGpuTemp = 0;
-float smoothedPower = 0;
-bool  firstReading = true;
-bool  firstCpuReading = true;
-bool  firstGpuReading = true;
+float smoothedCpuTemp   = 0;
+float smoothedGpuTemp   = 0;
+float smoothedPower     = 0;
+bool  firstReading      = true;
+bool  firstCpuReading   = true;
+bool  firstGpuReading   = true;
 bool  firstPowerReading = true;
 
-float         prevCpuTemp = 0;
-float         prevGpuTemp = 0;
-float         prevPower = 0;
+float         prevCpuTemp    = 0;
+float         prevGpuTemp    = 0;
+float         prevPower      = 0;
 unsigned long prevSampleTime = 0;
-float         cpuTempRate = 0;
-float         gpuTempRate = 0;
-float         powerRate = 0;
+float         cpuTempRate    = 0;
+float         gpuTempRate    = 0;
+float         powerRate      = 0;
 
-int currentPWM = 77;
+int currentPWM = IDLE_PWM;
 
 int rampPWM(int target) {
   int diff = abs(target - currentPWM);
@@ -52,14 +52,14 @@ int rampPWM(int target) {
 
 void applySafeMode() {
   currentPWM = rampPWM(SAFE_MODE_PWM);
-  analogWrite(FAN_PWM_PIN, currentPWM);
+  ledcWrite(FAN_PWM_CHANNEL, currentPWM);
   Serial.print("[SAFE MODE] No data received in >");
   Serial.print((unsigned long)TIMEOUT_MS);
   Serial.print("ms. Fan ramping to safe PWM: ");
   Serial.println(currentPWM);
   displaySafeMode = true;
-  displayStatus = DashStatus::SAFE_MODE;
-  displayPWM = currentPWM;
+  displayStatus   = DashStatus::SAFE_MODE;
+  displayPWM      = currentPWM;
 }
 
 int tempToPWM(float t) {

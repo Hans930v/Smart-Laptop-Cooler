@@ -18,12 +18,12 @@
 
 BluetoothSerial SerialBT;
 
-bool          wasConnected = false;
-bool          ledState = false;
-unsigned long lastBlinkTime = 0;
-unsigned long lastRxTime = 0;
+bool          wasConnected         = false;
+bool          ledState             = false;
+unsigned long lastBlinkTime        = 0;
+unsigned long lastRxTime           = 0;
 unsigned long emergencyBannerUntil = 0;
-bool          lastEmergencyState = false;
+bool          lastEmergencyState   = false;
 
 void updateLED(bool connected) {
   if (connected) {
@@ -31,7 +31,7 @@ void updateLED(bool connected) {
   } else {
     if (millis() - lastBlinkTime > 1000) {
       lastBlinkTime = millis();
-      ledState = !ledState;
+      ledState      = !ledState;
       digitalWrite(LED_PIN, ledState ? HIGH : LOW);
     }
   }
@@ -44,8 +44,9 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
-  pinMode(FAN_PWM_PIN, OUTPUT);
-  analogWrite(FAN_PWM_PIN, currentPWM);
+  ledcSetup(FAN_PWM_CHANNEL, FAN_PWM_FREQ, FAN_PWM_RESOLUTION);
+  ledcAttachPin(FAN_PWM_PIN, FAN_PWM_CHANNEL);
+  ledcWrite(FAN_PWM_CHANNEL, currentPWM);
 
   u8g2.begin();
 
@@ -83,7 +84,7 @@ void setup() {
   Serial.println("[INIT] LED: SLOW BLINK = waiting to pair | SOLID ON = connected");
   Serial.println("----------------------------------------");
 
-  lastRxTime = millis();
+  lastRxTime     = millis();
   prevSampleTime = millis();
 }
 
@@ -92,19 +93,19 @@ void loop() {
 
   if (isConnected && !wasConnected) {
     Serial.println("[BT] >>> Client CONNECTED <<<");
-    lastRxTime = millis();
-    displayConnected = true;
-    displaySafeMode = false;
-    displayStatus = DashStatus::NORMAL;
+    lastRxTime         = millis();
+    displayConnected   = true;
+    displaySafeMode    = false;
+    displayStatus      = DashStatus::NORMAL;
     displayBoostTag[0] = '\0';
     resetMaxTrackers();
     emergencyBannerUntil = 0;
-    lastEmergencyState = false;
+    lastEmergencyState   = false;
   }
   if (!isConnected && wasConnected) {
     Serial.println("[BT] Client disconnected. Waiting for reconnection...");
     displayConnected = false;
-    displayStatus = DashStatus::RECONNECTING;
+    displayStatus    = DashStatus::RECONNECTING;
   }
   wasConnected = isConnected;
 
@@ -119,7 +120,7 @@ void loop() {
         break;
       line[n++] = c;
     }
-    line[n] = '\0';
+    line[n]    = '\0';
     lastRxTime = millis();
 
     if (strcmp(line, "PING") == 0) {
@@ -146,7 +147,7 @@ void loop() {
       displaySafeMode = false;
 
       unsigned long now = millis();
-      float         dt = (now - prevSampleTime) / 1000.0;
+      float         dt  = (now - prevSampleTime) / 1000.0;
       if (dt <= 0)
         dt = 1.0;
 
@@ -159,23 +160,23 @@ void loop() {
         firstGpuReading = false;
       }
       if (v.cpuPowerValid) {
-        smoothedPower = smoothValue(cpuPower, smoothedPower, ALPHA_POWER, firstPowerReading);
+        smoothedPower     = smoothValue(cpuPower, smoothedPower, ALPHA_POWER, firstPowerReading);
         firstPowerReading = false;
       }
 
-      float rawCpuRate = v.cpuTempValid ? (smoothedCpuTemp - prevCpuTemp) / dt : 0;
-      float rawGpuRate = v.gpuTempValid ? (smoothedGpuTemp - prevGpuTemp) / dt : 0;
+      float rawCpuRate   = v.cpuTempValid ? (smoothedCpuTemp - prevCpuTemp) / dt : 0;
+      float rawGpuRate   = v.gpuTempValid ? (smoothedGpuTemp - prevGpuTemp) / dt : 0;
       float rawPowerRate = v.cpuPowerValid ? (smoothedPower - prevPower) / dt : 0;
 
       cpuTempRate = smoothValue(rawCpuRate, cpuTempRate, ALPHA_RATE, firstReading);
       gpuTempRate = smoothValue(rawGpuRate, gpuTempRate, ALPHA_RATE, firstReading);
-      powerRate = smoothValue(rawPowerRate, powerRate, ALPHA_RATE, firstReading);
+      powerRate   = smoothValue(rawPowerRate, powerRate, ALPHA_RATE, firstReading);
 
-      prevCpuTemp = smoothedCpuTemp;
-      prevGpuTemp = smoothedGpuTemp;
-      prevPower = smoothedPower;
+      prevCpuTemp    = smoothedCpuTemp;
+      prevGpuTemp    = smoothedGpuTemp;
+      prevPower      = smoothedPower;
       prevSampleTime = now;
-      firstReading = false;
+      firstReading   = false;
 
       float driveTemp;
       if (v.cpuTempValid && v.gpuTempValid) {
@@ -186,8 +187,8 @@ void loop() {
         driveTemp = smoothedGpuTemp;
       }
 
-      int    basePWM = tempToPWM(driveTemp);
-      int    boost = 0;
+      int    basePWM     = tempToPWM(driveTemp);
+      int    boost       = 0;
       String boostReason = "";
 
       float maxTempRate = 0;
@@ -200,9 +201,7 @@ void loop() {
       }
 
       if (maxTempRate > RISE_RATE_THRESHOLD) {
-        int rateBoost = constrain((int)((maxTempRate - RISE_RATE_THRESHOLD) * TEMP_RATE_BOOST_GAIN),
-                                  0,
-                                  TEMP_RATE_BOOST_CAP);
+        int rateBoost = constrain((int)((maxTempRate - RISE_RATE_THRESHOLD) * TEMP_RATE_BOOST_GAIN), 0, TEMP_RATE_BOOST_CAP);
         boost += rateBoost;
         boostReason += "T";
       }
@@ -219,14 +218,14 @@ void loop() {
 
       int targetPWM = constrain(basePWM + boost, MIN_TARGET_PWM, 255);
 
-      bool emergency = (v.cpuTempValid && smoothedCpuTemp >= EMERGENCY_TEMP) ||
-                       (v.gpuTempValid && smoothedGpuTemp >= EMERGENCY_TEMP);
+      bool emergency = (v.cpuTempValid && smoothedCpuTemp >= EMERGENCY_TEMP) || (v.gpuTempValid && smoothedGpuTemp >= EMERGENCY_TEMP);
 
       int appliedPWM;
       if (emergency) {
-        currentPWM = 255;
-        appliedPWM = 255;
-        Serial.println("[EMERGENCY] Thermal runaway, forcing full fan!");
+        if (!lastEmergencyState) {
+          Serial.println("[EMERGENCY] Thermal runaway, forcing full fan!");
+        }
+        appliedPWM = rampPWM(255);
       } else {
         appliedPWM = rampPWM(targetPWM);
       }
@@ -238,23 +237,23 @@ void loop() {
         }
         lastEmergencyState = true;
       } else {
-        lastEmergencyState = false;
+        lastEmergencyState   = false;
         emergencyBannerUntil = 0;
       }
 
       if (millis() < emergencyBannerUntil) {
-        displayStatus = DashStatus::EMERGENCY;
+        displayStatus      = DashStatus::EMERGENCY;
         displayBoostTag[0] = '\0';
       } else if (boost > 0) {
         displayStatus = DashStatus::BOOST;
         strncpy(displayBoostTag, boostReason.c_str(), sizeof(displayBoostTag) - 1);
         displayBoostTag[sizeof(displayBoostTag) - 1] = '\0';
       } else {
-        displayStatus = DashStatus::NORMAL;
+        displayStatus      = DashStatus::NORMAL;
         displayBoostTag[0] = '\0';
       }
 
-      analogWrite(FAN_PWM_PIN, appliedPWM);
+      ledcWrite(FAN_PWM_CHANNEL, appliedPWM);
       displayPWM = appliedPWM;
 
       displayCpuTemp = v.cpuTempValid ? cpuTemp : -1;
@@ -263,7 +262,7 @@ void loop() {
       Serial.println("------------");
       Serial.printf("CPU: %s | GPU: %s | Power: %s -> Drive: %.1fC | PWM: %d\n",
                     v.cpuTempValid ? String(cpuTemp, 1).c_str() : "N/A",
-                    v.gpuTempValid ? String(cpuTemp, 1).c_str() : "N/A",
+                    v.gpuTempValid ? String(gpuTemp, 1).c_str() : "N/A",
                     v.cpuPowerValid ? String(cpuPower, 2).c_str() : "N/A",
                     driveTemp,
                     appliedPWM);
